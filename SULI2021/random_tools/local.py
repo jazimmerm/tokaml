@@ -5,7 +5,7 @@ from scipy.ndimage import gaussian_filter1d
 import pandas as pd
 import os
 
-B1 = open('data/B1/174828.txt')
+B1 = open('../data/B1/174828.txt')
 # prmtan = open('data/prmtan_neped/174828.txt')
 B1_lines = B1.readlines()
 
