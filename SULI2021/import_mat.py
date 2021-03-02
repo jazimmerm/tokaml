@@ -6,8 +6,8 @@ from scipy.ndimage import gaussian_filter1d
 import pandas as pd
 import os
 
-
 # extract values for specific shot from above list of shots
+# this is for the HDF5 files my mentor gave me, I'll switch it up for the parquet files
 def get_shot(shot=None):
 
     cwd = os.getcwd()
@@ -38,8 +38,10 @@ def heatmap2d(arr, ax=None):
 
     if ax is None:
         ax = plt.gca()
+    print(arr[2][0])
     heatmap = ax.imshow(arr[1],
                     extent=[arr[0][0], arr[0][-1], arr[2][0], arr[2][-1]],
+                    # norm=LogNorm(),
                     origin='lower',
                     vmin=0, vmax=0.05,
                     interpolation='none')
@@ -88,14 +90,14 @@ def sweep(arr):
 
 
 # This is just to re-use the plots for different figures.
-def plot(arr, time):
+def plot(arr, tme):
 
     fig, (ax1, ax2) = plt.subplots(2, 1)
     heatmap2d(arr, ax=ax1)
-    ax1.axvline(time, c='r')
+    ax1.axvline(tme, c='r')
     # smooth bool switches between gaussian filtered 1d slice or raw data.
-    peaks = slice1d(arr, time, smooth=True, ax=ax2)
-    ax1.plot(np.full_like(peaks, time), arr[2][peaks], 'rx')
+    peaks = slice1d(arr, tme, smooth=True, ax=ax2)
+    ax1.plot(np.full_like(peaks, tme), arr[2][peaks], 'rx')
     plt.show()
 
 
@@ -112,12 +114,14 @@ def make_mask(arr, plot=False):
     if plot:
         ax1.imshow(mask,
                    extent=[arr[0][0], arr[0][-1], arr[2][0], arr[2][-1]],
+                   # norm=LogNorm(),
                    origin='lower',
                    cmap='Set1',
                    interpolation='none')
         ax1.set_title('Spectrogram With Modes Overlaid (1D Gaussian Filter Applied)')
         ax2.imshow(mask,
                    extent=[arr[0][0], arr[0][-1], arr[2][0], arr[2][-1]],
+                   # norm=LogNorm(),
                    origin='lower',
                    cmap='Set1',
                    interpolation='none')
@@ -138,29 +142,36 @@ def split(arr, plot=False):
     pm_norm = (pm[:, stop:] - np.amin(pm[:, stop:])) / (np.amax(pm[:, stop:]) - np.amin(pm[:, stop:]))
     sums = np.sum(pm_norm, axis=1)
     sums[sums <= 25] = 0
-    l_elms = argrelmax(np.gradient(sums), order=5)
-    r_elms = argrelmin(np.gradient(sums), order=5)
+    l_elms = argrelmax(np.gradient(sums), order=5)[0]
+    r_elms = argrelmin(np.gradient(sums), order=5)[0]
+
+    hot = np.zeros_like(arr[0])
+    for i in np.column_stack((l_elms, r_elms)):
+        hot[i[0]:i[1]] = 1
 
     if plot:
         fig, ax = plt.subplots(1, 1)
         heatmap2d(arr, ax=ax)
-        for i in l_elms[0]:
+        for i, num in enumerate(hot):
+            if num == 1:
+                ax.axvline(arr[0][i], c='orange')
+        for i in l_elms:
             ax.axvline(arr[0][i], ymin=stop/arr[1].shape[0], c='red', linewidth=4)
-        for i in r_elms[0]:
+        for i in r_elms:
             ax.axvline(arr[0][i], ymin=stop/arr[1].shape[0], c='green', linewidth=4)
         plt.show()
 
     # make dict with keys, values, times
     elm_cycles = {}
-    for i in range(len(r_elms[0])-1):
-        for j in arr[0][r_elms[0][i]:l_elms[0][i+1]]:
+    for i in range(len(r_elms)-1):
+        for j in arr[0][r_elms[i]:l_elms[i+1]]:
             k = np.argwhere(arr[0] == j)[0][0]
             elm_cycles[('{}'.format(i), j, k)] = arr[1].T[np.argwhere(arr[0] == j)][0][0]
 
     index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Time(ms)', 'Index'])
     elmdf = pd.DataFrame(elm_cycles.values(), index=index)
 
-    return elmdf
+    return elmdf, hot
 
 if __name__ == '__main__':
 
@@ -174,58 +185,27 @@ if __name__ == '__main__':
          [174870.]
     '''
 
-
+    
     # sh = get_shot(174830)
-    # # time = 1900
-    # # plot(sh, time)
-    # # plot_mask(sh, plot=True)
-    # mplot = make_mask(sh)
+
+    time = 1900
+    # plot(sh, time)
+    # make_mask(sh, plot=True)
+
+    freq = np.load('SULI2021/data/174830_freq.npy', allow_pickle=True)
+    time = np.load('SULI2021/data/174830_t.npy', allow_pickle=True)
+    spec = np.load('SULI2021/data/174830_spec.npy', allow_pickle=True)
+    sh = np.array([time, 10*np.log10(spec), freq], dtype=object)
+    split(sh, plot=True)
+    # plot(sh, 1500)
+    # make_mask(sh, plot=True)
+    # # exit()
+    #
+    # fig, ax = plt.subplots(1,1)
+    # ax.imshow(spec, norm=LogNorm(), origin='lower', interpolation=None)
+    # plt.show()
+    # exit()
 
     masked = np.load('SULI2021/data/masked_array.pickle', allow_pickle=True)
-
     split_df = pd.read_pickle('SULI2021/data/split_df.pickle')
 
-    single_df = split_df.xs('21', level=0)
-
-    # print(single_df.index.get_level_values('Index'))
-
-    elm_id = {}
-    for i in single_df.index.get_level_values('Index'):
-        if i == 0:
-            list1 = np.ma.flatnotmasked_contiguous(masked[0])
-            continue
-        else:
-            list2 = np.ma.flatnotmasked_contiguous(masked[i])
-            
-        for index in range(len(list2)):
-            if index not in elm_id:
-                elm_id[index] = []
-            try:
-                if list2[index].start <= list1[index].stop:
-                    elm_id[index].append(list2[index])
-                elif list2[index].stop >= list1[index].start:
-                    elm_id[index].append(list2[index])
-            except:
-                pass
-
-        list1 = list2
-
-
-    print(elm_id[20])
-
-
-    exit()
-
-    fig, ax1 = plt.subplots(1, 1)
-    split_list = split_df.index.get_level_values('Index').to_numpy()
-
-    msplit = mplot[split_list]
-
-    ax1.imshow(np.transpose(msplit),
-               origin='lower',
-               vmin=0, vmax=1,
-               cmap='Reds',
-               interpolation='none'
-               )
-
-    plt.show()
