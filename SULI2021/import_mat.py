@@ -1,50 +1,76 @@
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.signal import find_peaks, argrelmax, argrelmin
+from matplotlib.colors import LogNorm
+from scipy.signal import find_peaks, argrelmax, argrelmin, spectrogram
 from scipy.ndimage import gaussian_filter1d
 import pandas as pd
 import os
+import pyarrow
 
 # extract values for specific shot from above list of shots
 # this is for the HDF5 files my mentor gave me, I'll switch it up for the parquet files
-def get_shot(shot=None):
-
+def get_shot_from_mat(shot):
     cwd = os.getcwd()
-    file = cwd + '/SULI2021/data/RESULTS_ECH_EFFECTS_SPECTRA_B3.mat'
+    file = cwd + '/data/RESULTS_ECH_EFFECTS_SPECTRA_B3.mat'
     # import data from .mat file into python numpy arrays
     mat = h5py.File(file, 'r')
     dat_ech = mat['DAT_ECH']
     shlst = mat['shn'][:]
 
-    if shot:
-        shindex = [np.where(shlst == s) for s in shlst if shot in s][0][0][0]
+    shindex = [np.where(shlst == s) for s in shlst if shot in s][0][0][0]
 
-        tds = dat_ech.get('TIME')[shindex][0]
-        sds = dat_ech.get('SPECTRUM')[shindex][0]
-        fds = dat_ech.get('FREQ')[shindex][0]
+    tds = dat_ech.get('TIME')[shindex][0]
+    sds = dat_ech.get('SPECTRUM')[shindex][0]
+    fds = dat_ech.get('FREQ')[shindex][0]
 
-        time = mat[tds][0][:]
-        spectrum = mat[sds][:]
-        freq = mat[fds][0][:]
+    time = mat[tds][0][:]
+    spectrum = mat[sds][:]
+    freq = mat[fds][0][:]
 
-        return np.array([time, spectrum, freq], dtype=object)
-    else:
-        return [str(i) for i in shlst]
+    return np.array([time, spectrum, freq], dtype=object)
+
+# This is the one we can use for the parquet files.
+def get_shot(shot):
+
+    # change this to where your parquet files are stored
+    pq_dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'
+    file = pq_dir + str(shot) + '.pq'
+
+    raw = pd.read_parquet(file, engine='pyarrow')
+    raw_values = raw['amplitude'].values
+
+
+    y_height = 8192  # IMPORTANT: A power of 2 is most efficient
+    noverlap = (y_height*2) - int(np.floor(((len(raw_values))/10201))) + 1
+
+    freq, time, spectrum, = spectrogram(raw['amplitude'].values,
+                                        nperseg=y_height*2,
+                                        noverlap=noverlap)
+
+    print(raw['time'].values[0], raw['time'].values[-1])
+    time = 1000*raw['time'].values[-1]*(time-time[0])/(time[-1]-time[0])
+    # TODO: Normalize data between start start(raw['time'].values[0]) and stop (raw['time'].values[0]). Currently between zero and stop.
+    print(time[0], time[-1])
+    return np.array([time, spectrum, freq], dtype=object)
 
 
 # make the heatmap
 def heatmap2d(arr, ax=None):
-
+    '''
+    This basically just plots the spectrogram.
+    '''
     if ax is None:
         ax = plt.gca()
-    print(arr[2][0])
+
     heatmap = ax.imshow(arr[1],
-                    extent=[arr[0][0], arr[0][-1], arr[2][0], arr[2][-1]],
-                    # norm=LogNorm(),
-                    origin='lower',
-                    vmin=0, vmax=0.05,
-                    interpolation='none')
+                        norm=LogNorm(),
+                        origin='lower',
+                        extent=[arr[0][0], arr[0][-1], 0, len(arr[2])],
+                        interpolation='none',
+                        aspect='auto'
+                        )
+
     ax.set_xlabel('Time (ms)')
     ax.set_ylabel('Frequency (kHz)')
     return heatmap
@@ -52,18 +78,22 @@ def heatmap2d(arr, ax=None):
 
 # make the plot of the spectral data for given time
 def slice1d(arr, time, smooth=False, ax=None):
-
+    '''
+    This plots the 1D slice in plot slice. Not super necessary as an extra function, but I kinda wanted to see if
+    I could move matplotlib objects between functions.
+    '''
     if ax is None:
         ax = plt.gca()
-    index = np.argmin(np.abs(np.array(arr[0]) - time))  # finds index of time entered. Kind of slow.
-    if index < 0:
+    index = np.argmin(np.abs(np.array(arr[0]) - time))  # finds index of time entered. Kind of slow?
+    print(index, arr[0][index], time)
+    if len(arr[0]) < index < 0:
         raise ValueError('Selected time is out of bounds of run time for shot.')
     slce = arr[1][:, index]
     ax.plot(arr[2], slce)
     ax.set_xlabel('Frequency (kHz)')
     if smooth:
         smooth_arr = gaussian_filter1d(slce, 10)
-        peaks, _ = find_peaks(smooth_arr, prominence=(0.005, None), distance=75)
+        peaks, _ = find_peaks(smooth_arr, prominence=(0.05, None), distance=75)
         ax.plot(arr[2], smooth_arr, 'y')
         ax.plot(arr[2][peaks], smooth_arr[peaks], 'ro')
     else:
@@ -72,15 +102,18 @@ def slice1d(arr, time, smooth=False, ax=None):
     return peaks
 
 
-# Function to sweep through spectrogram
-def sweep(arr):
-
+# Function to find peaks through spectrogram
+def get_peaks(arr):
+    '''
+    finds and labels the peaks of each 1D slice of spectrogram. These are the locations of the modes.
+    '''
     peaks_map = np.zeros_like(arr[1].T)
     peaks_index = []
     for i in range(len(arr[1][0])):
         slce = arr[1][:, i]
-        smooth_arr = gaussian_filter1d(slce, 8)
-        peaks, properties = find_peaks(smooth_arr, prominence=(0.005, None), distance=75, height=0, width=0)
+        # These properties can be tweaked to fine-tune the results.
+        smooth_arr = gaussian_filter1d(slce, 10)
+        peaks, properties = find_peaks(smooth_arr, prominence=(0.05, None), distance=75, height=0, width=0)
         peaks_index.append(peaks.tolist())
         for e, w in enumerate(zip(properties['left_ips'], properties['right_ips'])):
             peaks_map[i][round(w[0]):round(w[1])] = properties['width_heights'][e]
@@ -90,8 +123,11 @@ def sweep(arr):
 
 
 # This is just to re-use the plots for different figures.
-def plot(arr, tme):
-
+def plot_slice(arr, tme):
+    '''
+    I made a few different plotting functions. This one plots the spectrogram and a cross section. For testing
+    smoothing functions.
+    '''
     fig, (ax1, ax2) = plt.subplots(2, 1)
     heatmap2d(arr, ax=ax1)
     ax1.axvline(tme, c='r')
@@ -102,29 +138,41 @@ def plot(arr, tme):
 
 
 def make_mask(arr, plot=False):
+
+    '''
+    make_mask returns a np.ma.masked object that is an array of equal shape to the original array.
+    This array is masked for all data points not belonging to the modes (the horizontal squigglies)
+    Currently, it sets all points belonging to modes to 1, but their real values can be used.
+    '''
     fig, (ax1, ax2) = plt.subplots(2, 1)
     heatmap2d(arr, ax=ax1)
-    peaks_index, peaks_map = sweep(arr)
+    peaks_index, peaks_map = get_peaks(arr)
     # creates array of the values of peaks and null values everywhere else
+    # to return real amplitudes of modes, uncomment below and comment out the next section marked by '''
+    # mask = np.ma.masked_where(peaks_map == 0, peaks_map)
+    # '''
     mask = np.ma.masked_where(peaks_map != 0, peaks_map)
     mask = mask.filled(fill_value=1)
     mask = np.ma.masked_where(mask == 0, mask)
+    # '''
     mask = np.transpose(mask)
 
     if plot:
         ax1.imshow(mask,
-                   extent=[arr[0][0], arr[0][-1], arr[2][0], arr[2][-1]],
-                   # norm=LogNorm(),
+                   extent=[arr[0][0], arr[0][-1], 0, len(arr[2])],
+                   norm=LogNorm(),
                    origin='lower',
                    cmap='Set1',
-                   interpolation='none')
+                   interpolation='none',
+                   aspect='auto')
         ax1.set_title('Spectrogram With Modes Overlaid (1D Gaussian Filter Applied)')
         ax2.imshow(mask,
-                   extent=[arr[0][0], arr[0][-1], arr[2][0], arr[2][-1]],
-                   # norm=LogNorm(),
+                   extent=[arr[0][0], arr[0][-1], 0, len(arr[2])],
+                   norm=LogNorm(),
                    origin='lower',
                    cmap='Set1',
-                   interpolation='none')
+                   interpolation='none',
+                   aspect='auto')
         ax2.set_title('Modes Only (1D Gaussian Filter Applied)')
         ax2.set_xlabel('Time (ms)')
         ax2.set_ylabel('Frequency (kHz)')
@@ -136,8 +184,13 @@ def make_mask(arr, plot=False):
 
 # returns dict with all elm cycles of a particular shot. Elements are transposed. Before plotting, transpose back.
 def split(arr, plot=False):
+    '''
+    split returns a dataframe of the original array which excludes all arrays belonging to ELM's.
+    It also returns a hot array with 0 for all intra-elm indices and 1 for all elm indices (the ones that were excluded
+    from the dataframe.
+    '''
 
-    pi, pm = sweep(arr)
+    pi, pm = get_peaks(arr)
     stop = 1500
     pm_norm = (pm[:, stop:] - np.amin(pm[:, stop:])) / (np.amax(pm[:, stop:]) - np.amin(pm[:, stop:]))
     sums = np.sum(pm_norm, axis=1)
@@ -185,19 +238,12 @@ if __name__ == '__main__':
          [174870.]
     '''
 
-    
-    # sh = get_shot(174830)
+    sh = get_shot(174828)
 
-    time = 1900
-    # plot(sh, time)
     # make_mask(sh, plot=True)
-
-    freq = np.load('SULI2021/data/174830_freq.npy', allow_pickle=True)
-    time = np.load('SULI2021/data/174830_t.npy', allow_pickle=True)
-    spec = np.load('SULI2021/data/174830_spec.npy', allow_pickle=True)
-    sh = np.array([time, 10*np.log10(spec), freq], dtype=object)
-    split(sh, plot=True)
-    # plot(sh, 1500)
+    # split(sh, plot=True)
+    plot_slice(sh, 3500)
+    print(sh[0], sh[2], len(sh[0]), len(sh[2]))
     # make_mask(sh, plot=True)
     # # exit()
     #
