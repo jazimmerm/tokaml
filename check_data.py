@@ -1,11 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-<<<<<<< HEAD
 arr = np.load('data/unmasked_array.npy', allow_pickle=True)
-=======
-arr = np.load('unmasked_array.npy', allow_pickle=True)
->>>>>>> 5c3ec884656cde95a75c959d6f2ace9df1a26e50
 
 fig = plt.figure()
 
