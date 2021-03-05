@@ -10,7 +10,7 @@ import pyarrow
 
 # extract values for specific shot from above list of shots
 # this is for the HDF5 files my mentor gave me, I'll switch it up for the parquet files
-def get_shot_from_mat(shot):
+def get_shot_from_mat():
     cwd = os.getcwd()
     file = cwd + '/data/RESULTS_ECH_EFFECTS_SPECTRA_B3.mat'
     # import data from .mat file into python numpy arrays
@@ -18,7 +18,7 @@ def get_shot_from_mat(shot):
     dat_ech = mat['DAT_ECH']
     shlst = mat['shn'][:]
 
-    shindex = [np.where(shlst == s) for s in shlst if shot in s][0][0][0]
+    shindex = [np.where(shlst == s) for s in shlst if shot_no in s][0][0][0]
 
     tds = dat_ech.get('TIME')[shindex][0]
     sds = dat_ech.get('SPECTRUM')[shindex][0]
@@ -30,28 +30,37 @@ def get_shot_from_mat(shot):
 
     return np.array([time, spectrum, freq], dtype=object)
 
+def elm_loc():
+
+    pq_dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'
+    file = pq_dir + str(shot_no) + '.pq'
+
+    raw = pd.read_parquet(file, engine='pyarrow')
+    raw_values = raw['amplitude'].values
+    peaks, _ = find_peaks(raw_values, prominence=(50, None), distance=500)
+    peaks_time = 1000*raw['time'].values[peaks]
+
+    return peaks_time
+
 # This is the one we can use for the parquet files.
-def get_shot(shot):
+def get_shot():
 
     # change this to where your parquet files are stored
     pq_dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'
-    file = pq_dir + str(shot) + '.pq'
+    file = pq_dir + str(shot_no) + '.pq'
 
     raw = pd.read_parquet(file, engine='pyarrow')
     raw_values = raw['amplitude'].values
 
-
     y_height = 8192  # IMPORTANT: A power of 2 is most efficient
-    noverlap = (y_height*2) - int(np.floor(((len(raw_values))/10201))) + 1
 
     freq, time, spectrum, = spectrogram(raw['amplitude'].values,
                                         nperseg=y_height*2,
-                                        noverlap=noverlap)
+                                        noverlap=(y_height*2) - int(np.floor(((len(raw_values))/10201))) + 1
+                                        )
 
-    print(raw['time'].values[0], raw['time'].values[-1])
-    time = 1000*raw['time'].values[-1]*(time-time[0])/(time[-1]-time[0])
-    # TODO: Normalize data between start start(raw['time'].values[0]) and stop (raw['time'].values[0]). Currently between zero and stop.
-    print(time[0], time[-1])
+    time = 1000*(raw['time'].values[0]+(raw['time'].values[-1]-raw['time'].values[0])*(time-time[0])/(time[-1]-time[0]))
+
     return np.array([time, spectrum, freq], dtype=object)
 
 
@@ -85,7 +94,6 @@ def slice1d(arr, time, smooth=False, ax=None):
     if ax is None:
         ax = plt.gca()
     index = np.argmin(np.abs(np.array(arr[0]) - time))  # finds index of time entered. Kind of slow?
-    print(index, arr[0][index], time)
     if len(arr[0]) < index < 0:
         raise ValueError('Selected time is out of bounds of run time for shot.')
     slce = arr[1][:, index]
@@ -190,17 +198,24 @@ def split(arr, plot=False):
     from the dataframe.
     '''
 
-    pi, pm = get_peaks(arr)
+    _, pm = get_peaks(arr)
+    masko = make_mask(arr).T
+    sums = np.sum(masko, axis=1)
     stop = 1500
-    pm_norm = (pm[:, stop:] - np.amin(pm[:, stop:])) / (np.amax(pm[:, stop:]) - np.amin(pm[:, stop:]))
-    sums = np.sum(pm_norm, axis=1)
-    sums[sums <= 25] = 0
-    l_elms = argrelmax(np.gradient(sums), order=5)[0]
-    r_elms = argrelmin(np.gradient(sums), order=5)[0]
+
+    l_elms = []
+    r_elms = []
+    elms = elm_loc()
+    for elm in elms:
+        i_elm = np.argmin(np.abs(np.array(arr[0]) - elm))
+        l_elm = np.argmax(np.gradient(sums[i_elm-50:i_elm+50]))+i_elm-50
+        r_elm = np.argmin(np.gradient(sums[i_elm-50:i_elm+50]))+i_elm-50
+        l_elms.append(l_elm)
+        r_elms.append(r_elm)
 
     hot = np.zeros_like(arr[0])
-    for i in np.column_stack((l_elms, r_elms)):
-        hot[i[0]:i[1]] = 1
+    # for i in np.column_stack((l_elms, r_elms)):
+    #     hot[i[0]:i[1]] = 1
 
     if plot:
         fig, ax = plt.subplots(1, 1)
@@ -209,11 +224,11 @@ def split(arr, plot=False):
             if num == 1:
                 ax.axvline(arr[0][i], c='orange')
         for i in l_elms:
-            ax.axvline(arr[0][i], ymin=stop/arr[1].shape[0], c='red', linewidth=4)
+            ax.axvline(arr[0][i], ymin=stop/arr[1].shape[0], c='red')
         for i in r_elms:
-            ax.axvline(arr[0][i], ymin=stop/arr[1].shape[0], c='green', linewidth=4)
+            ax.axvline(arr[0][i], ymin=stop/arr[1].shape[0], c='green')
         plt.show()
-
+    return()
     # make dict with keys, values, times
     elm_cycles = {}
     for i in range(len(r_elms)-1):
@@ -237,21 +252,13 @@ if __name__ == '__main__':
          [174860.]
          [174870.]
     '''
+    global shot_no
+    shot_no = 174828
 
-    sh = get_shot(174828)
-
-    # make_mask(sh, plot=True)
-    # split(sh, plot=True)
+    sh = get_shot()
+    splt = split(sh, plot=True)
+    exit()
     plot_slice(sh, 3500)
-    print(sh[0], sh[2], len(sh[0]), len(sh[2]))
-    # make_mask(sh, plot=True)
+    make_mask(sh, plot=True)
     # # exit()
-    #
-    # fig, ax = plt.subplots(1,1)
-    # ax.imshow(spec, norm=LogNorm(), origin='lower', interpolation=None)
-    # plt.show()
-    # exit()
-
-    masked = np.load('SULI2021/data/masked_array.pickle', allow_pickle=True)
-    split_df = pd.read_pickle('SULI2021/data/split_df.pickle')
 
