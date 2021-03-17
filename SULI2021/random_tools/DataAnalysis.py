@@ -141,4 +141,31 @@ if __name__ == '__main__':
     # sh.plot_slice(2000)
     # sh.split(plot=True)
     shots = sorted(os.listdir('/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'))
-    make_histogram(shots)
+    shots = [i.split('.')[0] for i in shots]
+
+    numelmslst = []
+    timelms = []
+    for shot in shots:
+        if '153' in shot:
+            print(shot+': REJECTED')
+            continue
+
+        sh = DataPrep(shot)
+        elms = sh.elm_loc()
+
+        elm_diff = np.diff(elms)
+        elm_filtered = elm_diff[elm_diff > 50]
+
+        numelmslst.append(len(elm_filtered))
+        timelms = np.concatenate((timelms, elm_filtered), axis=None)
+        print(shot)
+        print('Number of elms: ', len(elm_filtered))
+        print('Mean time between elms: ', np.mean(elm_filtered))
+        print('Median intraelm time: ', np.median(elm_filtered))
+
+    print('Total Number of ELMS: ', np.sum(numelmslst))
+    print('Average number of elms: ', np.mean(numelmslst))
+    print('Average Intra-ELM Time: ', np.mean(timelms))
+    print('Median Intra-ELM time: ', np.median(timelms))
+
+    # make_histogram(shots)

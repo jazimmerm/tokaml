@@ -6,7 +6,10 @@ from scipy.signal import find_peaks, argrelmax, argrelmin, spectrogram
 from scipy.ndimage import gaussian_filter1d
 import pandas as pd
 import os
-from tools import index_match
+try:
+    from tools import index_match
+except:
+    from .tools import index_match
 import pyarrow
 
 
@@ -16,19 +19,18 @@ class DataPrep:
 
         self.shot_no = shot_no
 
-        #variables that can be changed to tweak data output
-        #Minimum time between ELMs
+        # variables that can be changed to tweak data output
+        # Minimum time between ELMs
         self.min_elm_window = 50
-        #spectrogram parameters
+        # spectrogram parameters
         self.spectrogram_height = 8192
         self.spectrogram_width = 10201
-        #Whether to return binary masked array or encode amplitude into mask
+        # Whether to return binary masked array or encode amplitude into mask
         self.set_mask_binary = False
-        #height of highest mode
+        # height of highest mode
         self.stop_height = 1500
 
         self.arr = self.get_shot()
-
 
     # extract values for specific shot from above list of shots
     # this is for the HDF5 files my mentor gave me, I'll switch it up for the parquet files
@@ -65,7 +67,8 @@ class DataPrep:
 
         freq, time, spectrum, = spectrogram(raw['amplitude'].values,
                                             nperseg=y_height * 2,
-                                            noverlap=(y_height * 2) - int(np.floor(((len(raw_values)) / self.spectrogram_width))) + 1
+                                            noverlap=(y_height * 2) - int(
+                                                np.floor(((len(raw_values)) / self.spectrogram_width))) + 1
                                             )
 
         time = 1000 * (raw['time'].values[0] + (raw['time'].values[-1] - raw['time'].values[0]) * (time - time[0]) / (
@@ -74,22 +77,39 @@ class DataPrep:
 
         return np.array([time, spectrum, freq], dtype=object)
 
-    def elm_loc(self):
+    def elm_loc(self, plot=False):
         pq_dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'
         file = pq_dir + str(self.shot_no) + '.pq'
 
         raw = pd.read_parquet(file, engine='pyarrow')
         raw_values = raw['amplitude'].values
         raw_time = raw['time'].values
-        peaks, props = find_peaks(np.absolute(raw_values), prominence=(None, None), distance=1000, height=(np.median(abs(raw_values))*20, None),
+        peaks, props = find_peaks(np.absolute(raw_values), prominence=(None, None), distance=1000,
+                                  height=(np.median(abs(raw_values)) * 20, None),
                                   width=(None, None), rel_height=1.0)
         peaks_time = 1000 * raw_time[peaks]
 
-        # fig, (ax1, ax2) = plt.subplots(2, 1)
-        # self.heatmap2d(ax=ax1)
-        # ax2.plot(peaks, props['peak_heights'], 'ro')
-        # ax2.plot(range(len(raw_values)), np.absolute(raw_values))
-        # plt.show()
+        if plot:
+            fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
+            fig.subplots_adjust(hspace=0)
+
+            self.heatmap2d(ax=ax1)
+            ax2.plot(peaks_time, props['peak_heights'], 'ro')
+            ax2.plot(1000*raw_time, raw_values)
+            ax1.set_title(None)
+            ax1.text(0.5, 0.9, 'Spectrogram',
+                    horizontalalignment='center',
+                    verticalalignment='top',
+                    color='white', fontsize=16,
+                    transform=ax1.transAxes)
+            ax2.text(0.5, 0.9, 'Raw B-Dot Data',
+                    horizontalalignment='center',
+                    verticalalignment='top',
+                    color='black', fontsize=16,
+                    transform=ax2.transAxes)
+            ax2.set_xlabel('Time (ms)')
+            fig.suptitle(f'Locations of ELMs in shot {self.shot_no}', fontsize=20)
+            plt.show()
 
         return peaks_time
 
@@ -108,9 +128,9 @@ class DataPrep:
                             interpolation='none',
                             aspect='auto'
                             )
-
+        ax.set_title('Spectrogram')
         ax.set_xlabel('Time (ms)')
-        ax.set_ylabel('Frequency (kHz)')
+        ax.set_ylabel('Frequency')
         return heatmap
 
     # make the plot of the spectral data for given time
@@ -228,7 +248,6 @@ class DataPrep:
         pm_norm = (pm[:, stop:] - np.amin(pm[:, stop:])) / (np.amax(pm[:, stop:]) - np.amin(pm[:, stop:]))
         sums = np.sum(pm_norm, axis=1)
 
-
         # peaks, props = find_peaks(sums, distance=100, prominence=(1, None), width=(None, None), rel_height=1.0)
         # l_elms = props['left_ips']
         # r_elms = props['right_ips']
@@ -237,8 +256,8 @@ class DataPrep:
         for i, elm in enumerate(elms):
             i_elm = index_match(self.arr[0], elm)
             # l_elms[i] = i_l_elm
-            l_elm = np.argmax(np.gradient(sums[i_elm-50:i_elm+50]))+i_elm-50
-            r_elm = np.argmin(np.gradient(sums[i_elm-50:i_elm+50]))+i_elm-50
+            l_elm = np.argmax(np.gradient(sums[i_elm - 50:i_elm + 50])) + i_elm - 50
+            r_elm = np.argmin(np.gradient(sums[i_elm - 50:i_elm + 50])) + i_elm - 50
             l_elms[i] = l_elm
             r_elms[i] = r_elm
         #
@@ -281,11 +300,12 @@ class DataPrep:
         self.elms = self.elm_loc()
         elm_cycles = {}
         for elm_no, elm_time in enumerate(self.elms[:-1]):
-            if self.elms[elm_no+1]-self.elms[elm_no] <= self.min_elm_window:  #default min_elm_window = 50
+
+            if self.elms[elm_no + 1] - self.elms[elm_no] <= self.min_elm_window:  # default min_elm_window = 50
                 continue
 
             start_ielm = index_match(self.arr[0], elm_time)
-            stop_ielm = index_match(self.arr[0], self.elms[elm_no+1])
+            stop_ielm = index_match(self.arr[0], self.elms[elm_no + 1])
 
             for ielm_time in self.arr[0][start_ielm:stop_ielm]:
                 ielm_index = np.argwhere(self.arr[0] == ielm_time)[0][0]
@@ -294,7 +314,6 @@ class DataPrep:
         self.elmdf = pd.DataFrame(elm_cycles.values(), index=index)
 
         return self.elmdf
-
 
     def time_to_elm(self):
 
@@ -308,10 +327,16 @@ class DataPrep:
         for i, elm in enumerate(self.elms):
             next_elm_index = index_match(ielm_time, elm)
             for j, ielm in enumerate(ielm_time[prev_elm_index:next_elm_index]):
-                dict[(i, ielm, j+prev_elm_index)] = ielm_time[next_elm_index] - ielm
+                dict[(i, ielm, j + prev_elm_index)] = ielm_time[next_elm_index] - ielm
             prev_elm_index = next_elm_index
 
         index = pd.MultiIndex.from_tuples(dict.keys(), names=['ELM_No', 'Time (ms)', 'Index'])
         t_to_elm = pd.DataFrame(dict.values(), index=index, columns=['Time to Next ELM (ms)'])
 
         return t_to_elm
+
+
+if __name__ == '__main__':
+    sh = DataPrep(170874)
+    sh.plot_slice(1900)
+    # sh.elm_loc(plot=True)
