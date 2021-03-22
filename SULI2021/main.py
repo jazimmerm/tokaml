@@ -1,5 +1,6 @@
 # from random_tools.DataAnalysis import *
 from random_tools.DataPrep import *
+from random_tools.tools import *
 
 if __name__ == '__main__':
 
@@ -12,6 +13,9 @@ if __name__ == '__main__':
          [174860.]
          [174870.]
     '''
+
+    plot_t_to_elm(170867)
+    exit()
 
     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
     sh178430 = DataPrep(170874)

@@ -109,6 +109,7 @@ class DataPrep:
                     transform=ax2.transAxes)
             ax2.set_xlabel('Time (ms)')
             fig.suptitle(f'Locations of ELMs in shot {self.shot_no}', fontsize=20)
+
             plt.show()
 
         return peaks_time
@@ -233,7 +234,9 @@ class DataPrep:
             ax2.set_ylabel('Frequency (kHz) mask plot')
             plt.show()
 
-        return mask.T
+        self.mask = mask.T
+        return self.mask
+
 
     # returns dict with all elm cycles of a particular shot. Needs work.
     def split_from_spec(self, plot=False):
@@ -309,34 +312,35 @@ class DataPrep:
 
             for ielm_time in self.arr[0][start_ielm:stop_ielm]:
                 ielm_index = np.argwhere(self.arr[0] == ielm_time)[0][0]
-                elm_cycles[(elm_no, ielm_time, ielm_index)] = self.arr[1].T[ielm_index]
-        index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Time(ms)', 'Index'])
+                elm_cycles[(elm_no, ielm_index, ielm_time, self.arr[0][stop_ielm]-ielm_time)] = self.arr[1].T[ielm_index]
+        index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', 'T - ELM (ms)'])
         self.elmdf = pd.DataFrame(elm_cycles.values(), index=index)
 
         return self.elmdf
 
-    def time_to_elm(self):
-
-        if not hasattr(self, 'elmdf'):
-            self.split()
-
-        ielm_time = np.array([i[1] for i in self.elmdf.index])
-
-        dict = {}
-        prev_elm_index = 0
-        for i, elm in enumerate(self.elms):
-            next_elm_index = index_match(ielm_time, elm)
-            for j, ielm in enumerate(ielm_time[prev_elm_index:next_elm_index]):
-                dict[(i, ielm, j + prev_elm_index)] = ielm_time[next_elm_index] - ielm
-            prev_elm_index = next_elm_index
-
-        index = pd.MultiIndex.from_tuples(dict.keys(), names=['ELM_No', 'Time (ms)', 'Index'])
-        t_to_elm = pd.DataFrame(dict.values(), index=index, columns=['Time to Next ELM (ms)'])
-
-        return t_to_elm
+    # def time_to_elm(self):
+    #
+    #     if not hasattr(self, 'elmdf'):
+    #         self.split()
+    #
+    #     ielm_time = np.array([i[1] for i in self.elmdf.index])
+    #
+    #     dict = {}
+    #     prev_elm_index = 0
+    #     for i, elm in enumerate(self.elms):
+    #         next_elm_index = index_match(self.arr[0], elm)
+    #         for j, ielm in enumerate(ielm_time[prev_elm_index:next_elm_index]):
+    #             dict[(i, ielm, j + prev_elm_index)] = ielm_time[next_elm_index] - ielm
+    #         prev_elm_index = next_elm_index
+    #
+    #     index = pd.MultiIndex.from_tuples(dict.keys(), names=['ELM_No', 'Time (ms)', 'Index'])
+    #     t_to_elm = pd.DataFrame(dict.values(), index=index, columns=['Time to Next ELM (ms)'])
+    #
+    #     return t_to_elm
 
 
 if __name__ == '__main__':
-    sh = DataPrep(170874)
-    sh.plot_slice(1900)
-    # sh.elm_loc(plot=True)
+
+    from SULI2021.random_tools.tools import plot_t_to_elm
+
+    plot_t_to_elm(170874)

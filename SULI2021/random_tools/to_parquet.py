@@ -2,8 +2,9 @@ import pandas as pd
 import os
 import pyarrow
 
-files = os.listdir('/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/B3/')
+
 base = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/B3/'
+files = os.listdir(base)
 
 for file in files:
     df = pd.read_csv(os.path.join(base, file), delimiter = " ")
