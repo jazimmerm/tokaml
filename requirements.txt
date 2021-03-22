@@ -24,4 +24,6 @@ scipy==1.5.4
 six==1.15.0
 tifffile==2021.2.26
 torch==1.8.0
+torchaudio==0.8.0
+torchvision==0.9.0
 typing-extensions==3.7.4.3
