@@ -158,26 +158,38 @@ class DataPrep:
             ax.plot(self.arr[2][peaks], slce[peaks], 'ro')
         return peaks
 
+    # helper function
+    def peakomatic(self, slce):
+        # These properties can be tweaked to fine-tune the results.
+        smooth_arr = gaussian_filter1d(slce, 10)
+        peaks, properties = find_peaks(smooth_arr, prominence=(np.mean(abs(smooth_arr)), None), distance=75,
+                                       height=0,
+                                       width=0)
+
+        return peaks, properties['peak_heights'], zip(properties['left_ips'], properties['right_ips']), properties['width_heights']
+
     # Function to find peaks through spectrogram
     def get_peaks(self):
         '''
         finds and labels the peaks of each 1D slice of spectrogram. These are the locations of the modes.
         '''
-        peaks_map = np.zeros_like(self.arr[1].T)
+
+        if hasattr(self, 'peaks_index'):
+            return self.peaks_index, self.peaks_map
+
+        self.peaks_map = np.zeros_like(self.arr[1].T)
         peaks_index = []
         for i in range(len(self.arr[1][0])):
             slce = self.arr[1][:, i]
-            # These properties can be tweaked to fine-tune the results.
-            smooth_arr = gaussian_filter1d(slce, 10)
-            peaks, properties = find_peaks(smooth_arr, prominence=(np.mean(abs(smooth_arr)), None), distance=75,
-                                           height=0,
-                                           width=0)
-            peaks_index.append(peaks.tolist())
-            for e, w in enumerate(zip(properties['left_ips'], properties['right_ips'])):
-                peaks_map[i][round(w[0]):round(w[1])] = properties['width_heights'][e]
-            peaks_map[i][peaks] = properties['peak_heights']
-        peaks_index = np.asarray(peaks_index, dtype=object)
-        return peaks_index, peaks_map
+
+            peaks, peak_heights, width, width_heights = self.peakomatic(slce)
+
+            peaks_index.append(peaks)
+            for e, w in enumerate(width):
+                self.peaks_map[i][round(w[0]):round(w[1])] = width_heights[e]
+            self.peaks_map[i][peaks] = peak_heights
+        self.peaks_index = np.asarray(peaks_index, dtype=object)
+        return self.peaks_index, self.peaks_map
 
     def plot_slice(self, tme):
         '''
@@ -198,6 +210,9 @@ class DataPrep:
         This array is masked for all data points not belonging to the modes (the horizontal squigglies)
         Currently, it sets all points belonging to modes to 1, but their real values can be used.
         '''
+
+        if hasattr(self, 'mask'):
+            return self.mask
 
         peaks_index, peaks_map = self.get_peaks()
         # creates array of the amplitude values of modes and null values everywhere else
@@ -300,6 +315,9 @@ class DataPrep:
 
     def split(self):
 
+        if hasattr(self, 'elmdf'):
+            return self.elmdf
+
         self.elms = self.elm_loc()
         elm_cycles = {}
         for elm_no, elm_time in enumerate(self.elms[:-1]):
@@ -311,36 +329,34 @@ class DataPrep:
             stop_ielm = index_match(self.arr[0], self.elms[elm_no + 1])
 
             for ielm_time in self.arr[0][start_ielm:stop_ielm]:
+                '''MAX: Uncomment the lines below to get % of ELM'''
                 ielm_index = np.argwhere(self.arr[0] == ielm_time)[0][0]
-                elm_cycles[(elm_no, ielm_index, ielm_time, self.arr[0][stop_ielm]-ielm_time)] = self.arr[1].T[ielm_index]
+                elm_cycles[(elm_no, ielm_index, ielm_time, self.arr[0][stop_ielm] - ielm_time)] = self.arr[1].T[ielm_index]
+                # elm_cycles[(elm_no, ielm_index, ielm_time, (ielm_time-self.arr[0][start_ielm])/(self.arr[0][stop_ielm]-self.arr[0][start_ielm]))] = self.arr[1].T[ielm_index]
         index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', 'T - ELM (ms)'])
+        # index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', '% ELM'])
         self.elmdf = pd.DataFrame(elm_cycles.values(), index=index)
 
         return self.elmdf
 
-    # def time_to_elm(self):
-    #
-    #     if not hasattr(self, 'elmdf'):
-    #         self.split()
-    #
-    #     ielm_time = np.array([i[1] for i in self.elmdf.index])
-    #
-    #     dict = {}
-    #     prev_elm_index = 0
-    #     for i, elm in enumerate(self.elms):
-    #         next_elm_index = index_match(self.arr[0], elm)
-    #         for j, ielm in enumerate(ielm_time[prev_elm_index:next_elm_index]):
-    #             dict[(i, ielm, j + prev_elm_index)] = ielm_time[next_elm_index] - ielm
-    #         prev_elm_index = next_elm_index
-    #
-    #     index = pd.MultiIndex.from_tuples(dict.keys(), names=['ELM_No', 'Time (ms)', 'Index'])
-    #     t_to_elm = pd.DataFrame(dict.values(), index=index, columns=['Time to Next ELM (ms)'])
-    #
-    #     return t_to_elm
+    def peak_properties(self):
+
+        if not hasattr(self, 'elmdf'):
+            self.split()
+
+        props = self.elmdf.apply(lambda x: pd.Series(self.peakomatic(x), index=['Peak', 'Peak Amplitude', 'Left/Right', 'Width Height']), axis=1)
+
+        return props
 
 
 if __name__ == '__main__':
 
-    from SULI2021.random_tools.tools import plot_t_to_elm
+    sh = DataPrep(174828)
 
-    plot_t_to_elm(170874)
+    # print(sh.get_peaks())
+
+    shot = sh.peak_properties().xs(0, level=0)
+
+    percentage = shot.index[3] # (0, 901, 1273.45, 0)
+    # Left/Right [(left_index1, right_index1), (left_index2, right_index2)]
+    width = shot.loc['Left/Right']
