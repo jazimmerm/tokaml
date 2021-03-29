@@ -1,6 +1,7 @@
 from DataPrep import *
 from scipy import interpolate
 import matplotlib.pyplot as plt
+import pandas as pd
 
 from SULI2021.random_tools.DataPrep import DataPrep
 
@@ -144,12 +145,23 @@ def make_histogram(shots, plot=False, ax=None):
     return total
 
 
+def list_widths(window: pd.DataFrame):
+
+    widths = window['Left/Right'].apply(lambda x: list(map(lambda y: y[1]-y[0], x)))
+
+    return widths
+
+
 if __name__ == '__main__':
 
-    # shot = 174830
-    # sh = DataPrep(shot)
-    # sh.plot_slice(2000)
-    # sh.split(plot=True)
+    shot = 174830
+    sh = DataPrep(shot)
+    window_num = 1
+    window = sh.peak_properties().xs(window_num, level=0)
+    window['Widths'] = window['Left/Right'].apply(lambda x: [*map(lambda y: y[1]-y[0], x)])
+    print(window['Widths'].tolist())
+    exit()
+
     shots = sorted(os.listdir('/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'))
     make_histogram(shots)
     shots = [i.split('.')[0] for i in shots]
