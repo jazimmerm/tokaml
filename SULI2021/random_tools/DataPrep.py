@@ -16,9 +16,10 @@ import pyarrow
 
 class DataPrep:
 
-    def __init__(self, shot_no):
+    def __init__(self, shot_no, dir):
 
         self.shot_no = shot_no
+        self.dir = dir
 
         # variables that can be changed to tweak data output
         # Minimum time between ELMs
@@ -71,8 +72,7 @@ class DataPrep:
     # This is the one we can use for the parquet files.
     def get_shot(self):
         # change this to where your parquet files are stored
-        pq_dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'
-        file = pq_dir + str(self.shot_no) + '.pq'
+        file = self.dir + str(self.shot_no) + '.pq'
 
         raw = pd.read_parquet(file, engine='pyarrow')
         raw_values = raw['amplitude'].values
