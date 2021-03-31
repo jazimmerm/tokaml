@@ -1,14 +1,14 @@
-from numpy import argmin, abs, array
+from numpy import argmin, abs, array, ndarray
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
 import SULI2021.random_tools.DataPrep as dp
 
-def index_match(arr1, time):
+
+def index_match(arr1: ndarray, time: float):
     return argmin(abs(array(arr1) - time))
 
 
 def plot_t_to_elm(sh_obj):
-
     print(type(sh_obj))
     elmdf = sh_obj.split()
     print(elmdf.index)
@@ -22,8 +22,8 @@ def plot_t_to_elm(sh_obj):
     ax2.plot(range(len(elmdf.index)), [i[3] for i in elmdf.index])
     plt.show()
 
-def plot_split(sh_obj):
 
+def plot_split(sh_obj):
     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True)
 
     fig.subplots_adjust(hspace=0)
@@ -33,9 +33,8 @@ def plot_split(sh_obj):
     sh_obj.set_mask_binary = True
     mask = sh_obj.make_mask()
     elm_loc = sh_obj.elm_loc()
-    ielm_index = np.array([i[2] for i in elmdf.index])
-    ielm_time = np.array([i[1] for i in elmdf.index])
-
+    ielm_index = array([i[1] for i in elmdf.index])
+    ielm_time = array([i[2] for i in elmdf.index])
     ax2.imshow(mask[ielm_index].T,
                vmin=0, vmax=1,
                origin='lower',
@@ -61,9 +60,9 @@ def plot_split(sh_obj):
              transform=ax2.transAxes)
 
     for i, elm in enumerate(elm_loc[:-1]):
-        if elm_loc[i+1] - elm <= 50:
+        if elm_loc[i + 1] - elm <= 50:
             continue
-        elm_index = np.argmin(np.abs(np.array(ielm_time - elm)))
+        elm_index = argmin(abs(array(ielm_time - elm)))
         ax1.axvline(elm_index, c='r', alpha=0.1)
         ax2.axvline(elm_index, c='r', alpha=0.1)
 

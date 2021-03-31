@@ -157,6 +157,7 @@ if __name__ == '__main__':
     shot = 174830
     sh = DataPrep(shot)
     window_num = 1
+
     window = sh.peak_properties().xs(window_num, level=0)
     window['Widths'] = window['Left/Right'].apply(lambda x: [*map(lambda y: y[1]-y[0], x)])
     print(window['Widths'].tolist())

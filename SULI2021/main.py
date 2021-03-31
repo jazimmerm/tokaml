@@ -14,3 +14,6 @@ if __name__ == '__main__':
          [174870.]
     '''
 
+    sh = DataPrep(174828)
+    plot_split(sh)
+    # sh.split()

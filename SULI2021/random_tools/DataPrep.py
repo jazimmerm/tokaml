@@ -37,7 +37,7 @@ class DataPrep:
     def peakomatic(slce):
         # These properties can be tweaked to fine-tune the results.
         smooth_arr = gaussian_filter1d(slce, 10)
-        peaks, properties = find_peaks(smooth_arr, prominence=(np.mean(abs(smooth_arr)), None), distance=75,
+        peaks, properties = find_peaks(smooth_arr, prominence=(np.mean(abs(smooth_arr)), None), distance=100,
                                        height=0,
                                        width=0)
 
@@ -45,7 +45,6 @@ class DataPrep:
                properties['peak_heights'], \
                list(zip(properties['left_ips'], properties['right_ips'])), \
                properties['width_heights']
-
 
     # extract values for specific shot from above list of shots
     # this is for the HDF5 files my mentor gave me, I'll switch it up for the parquet files
@@ -276,7 +275,60 @@ class DataPrep:
         self.mask = mask.T
         return self.make_mask(plot=plot)
 
-    def split(self):
+    def split(self, plot=False):
+        '''
+        split returns a dataframe of the original array which excludes all arrays belonging to ELM's.
+        It also returns a hot array with 0 for all intra-elm indices and 1 for all elm indices (the ones that were excluded
+        from the dataframe.
+        '''
+
+        if hasattr(self, 'elmdf'):
+            return self.elmdf
+
+        pm = self.arr[1].T
+        stop = self.stop_height  # default 1500
+        pm_norm = (pm[:, stop:] - np.amin(pm[:, stop:])) / (np.amax(pm[:, stop:]) - np.amin(pm[:, stop:]))
+        sums = np.sum(pm_norm, axis=1)
+
+        peaks, props = find_peaks(sums, distance=10, prominence=(0.5, None), width=(10, 50), rel_height=0.95)
+        l_elms = props['left_ips']
+        r_elms = props['right_ips']
+        r_elms = np.asarray([*map(np.ceil, r_elms)]).astype(int)
+        l_elms = np.asarray([*map(np.floor, l_elms)]).astype(int)
+        l_elms_time = self.arr[0][l_elms]
+        r_elms_time = self.arr[0][r_elms]
+
+        if plot:
+            fig, ax = plt.subplots(1, 1)
+            self.heatmap2d(ax=ax)
+            for t in l_elms_time:
+                ax.axvline(t, ymin=stop / self.arr[1].shape[0], c='red')
+            for t in r_elms_time:
+                ax.axvline(t, ymin=stop / self.arr[1].shape[0], c='green')
+            plt.show()
+
+        # make dict with keys, values, times
+        elm_cycles = {}
+        elms = list(zip(l_elms_time, r_elms_time))
+        for elm_no in range(len(elms[:-1])):
+            if elms[elm_no + 1][0] - elms[elm_no][1] <= self.min_elm_window:  # default min_elm_window = 50
+                continue
+
+            start_ielm = index_match(self.arr[0], elms[elm_no][1])
+            stop_ielm = index_match(self.arr[0], elms[elm_no + 1][0])
+
+            for ielm_time in self.arr[0][start_ielm:stop_ielm]:
+                ielm_index = np.argwhere(self.arr[0] == ielm_time)[0][0]
+                elm_cycles[(elm_no, ielm_index, ielm_time, self.arr[0][stop_ielm] - ielm_time)] = self.arr[1].T[ielm_index]
+                # elm_cycles[(elm_no, ielm_index, ielm_time, (ielm_time - self.arr[0][start_ielm]) /
+                #             (self.arr[0][stop_ielm] - self.arr[0][start_ielm]))] = self.arr[1].T[ielm_index]
+        index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', 'T - ELM (ms)'])
+        # index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', '% ELM'])
+        self.elmdf = pd.DataFrame(elm_cycles.values(), index=index)
+
+        return self.elmdf
+
+    def split_from_raw(self):
 
         if hasattr(self, 'elmdf'):
             return self.elmdf
@@ -303,7 +355,6 @@ class DataPrep:
 
         return self.elmdf
 
-
     def peak_properties(self, blur, plot=False):
 
         if not hasattr(self, 'elmdf'):
@@ -316,7 +367,6 @@ class DataPrep:
                 self.peak_properties(blur=blur)
                 return
 
-        # print(self.elmdf.index.get_level_values(level='Index').to_numpy())
         mask = mask_bin[self.elmdf.index.get_level_values(level='Index').to_numpy()]
         mask_blur = gaussian_filter(mask, blur)
         if plot:
@@ -330,19 +380,38 @@ class DataPrep:
             plt.show()
 
         maskdf = pd.DataFrame(data=mask_blur, index=self.elmdf.index)
-        props = maskdf.apply(lambda x: pd.Series(self.peakomatic(x), index=['Peak', 'Peak Amplitude', 'Left/Right', 'Width Height']), axis=1)
+        props = maskdf.apply(
+            lambda x: pd.Series(self.peakomatic(x), index=['Peak', 'Peak Amplitude', 'Left/Right', 'Width Height']),
+            axis=1)
 
         return props
 
 
 if __name__ == '__main__':
     sh = DataPrep(174828)
+    exit()
     sh.set_mask_binary = True
-    window = sh.peak_properties(blur=5)
-    for time in window.xs(2, level=0).iterrows():
-        # print(time[0])
-        print(time[0][1], time[1][0])
-        plt.scatter(np.full_like(time[1][0], time[0][1]), time[1][0])
+    window_spec = sh.split().xs(5, level=0)
+    plt.imshow(window_spec.T,
+               extent=[window_spec.index.get_level_values(level='Time (ms)')[0],
+                       window_spec.index.get_level_values(level='Time (ms)')[-1],
+                       0,
+                       len(window_spec.values[0])],
+               norm=LogNorm(),
+               cmap='Set1',
+               origin='lower',
+               interpolation='none',
+               aspect='auto')
+    window = sh.peak_properties(blur=3)
+    for time in window.xs(5, level=0).iterrows():
+        widths = np.array(time[1][2]).T
+        widths[0] = np.subtract(time[1][0], widths[0])
+        widths[1] = np.subtract(widths[1], time[1][0])
+        print(widths)
+        plt.errorbar(np.full_like(time[1][0], time[0][1]), time[1][0], yerr=widths,
+                     color='blue', fmt='o',
+                     solid_capstyle='projecting', capsize=5)
+    plt.ylim((0, 1500))
     plt.show()
     exit()
     window = sh.peak_properties().xs(2, level=0)
