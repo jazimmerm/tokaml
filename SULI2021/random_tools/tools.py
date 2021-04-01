@@ -9,7 +9,6 @@ def index_match(arr1: ndarray, time: float):
 
 
 def plot_t_to_elm(sh_obj):
-    print(type(sh_obj))
     elmdf = sh_obj.split()
     print(elmdf.index)
 

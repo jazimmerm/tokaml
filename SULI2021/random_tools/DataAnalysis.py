@@ -11,7 +11,7 @@ def minmax():
     t_inter_elm = []
     for file in os.listdir('/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'):
         file = file.split('.')[0]
-        sh = DataPrep(file)
+        sh = DataPrep(file, dir)
         elms = sh.elm_loc()
         if len(elms) < 5:
             continue
@@ -35,7 +35,7 @@ def average_modes():
             continue
         print(file)
         file = file.split('.')[0]
-        sh = DataPrep(file)
+        sh = DataPrep(file, dir)
 
         masked = sh.make_mask()
         print('Mask Complete')
@@ -113,7 +113,7 @@ def make_histogram(shots, plot=False, ax=None):
             print('\nBeginning analysis shot {0}:'.format(shot), end=' ')
 
         print('Getting shot data'.format(shot), end=' ')
-        sh: DataPrep = DataPrep(shot)
+        sh: DataPrep = DataPrep(shot, dir)
         sh.set_mask_binary = True
         print('\rPreparing analysis shot {0}: Detecting ELMs'.format(shot), end=' ')
         elm_df = sh.split()
@@ -122,7 +122,7 @@ def make_histogram(shots, plot=False, ax=None):
         print('\rPreparing analysis shot {0}: Ready.'.format(shot))
 
         for ielm_df in elm_df.groupby(level=0):
-            z_new = make_interpolation(sh, ielm_df, xdim, ydim, )
+            z_new = make_interpolation(sh, ielm_df, xdim, ydim)
             total = total + z_new
             
     if plot:
@@ -154,6 +154,8 @@ def list_widths(window: pd.DataFrame):
 
 if __name__ == '__main__':
 
+    global dir
+    dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'
     shot = 174830
     sh = DataPrep(shot)
     window_num = 1

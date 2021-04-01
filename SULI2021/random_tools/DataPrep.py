@@ -31,6 +31,7 @@ class DataPrep:
         self.set_mask_binary = False
         # height of highest mode
         self.stop_height = 1500
+        self.blur = 3
 
         self.arr = self.get_shot()
 
@@ -46,6 +47,20 @@ class DataPrep:
                properties['peak_heights'], \
                list(zip(properties['left_ips'], properties['right_ips'])), \
                properties['width_heights']
+
+    def id_band(self, xsec):
+
+        ielm_df = self.peak_properties().xs(xsec, level=0)
+        widths = ielm_df['Left/Right'].to_numpy()
+        peaks = ielm_df['Peak'].to_numpy()
+        band_id = []
+
+        for i, width_list in enumerate(reversed(widths)):
+            for band, bandwidth in enumerate(width_list):
+                if band not in band_id:
+                    band_id.append(band)
+        print(band_id)
+        return
 
     # extract values for specific shot from above list of shots
     # this is for the HDF5 files my mentor gave me, I'll switch it up for the parquet files
@@ -186,7 +201,7 @@ class DataPrep:
 
         self.peaks_map = np.zeros_like(self.arr[1].T)
         peaks_index = []
-        for i in range(len(self.arr[1][0])):
+        for i, _ in enumerate(self.arr[1][0]):
             slce = self.arr[1][:, i]
 
             peaks, peak_heights, width, width_heights = self.peakomatic(slce)
@@ -310,7 +325,7 @@ class DataPrep:
         # make dict with keys, values, times
         elm_cycles = {}
         elms = list(zip(l_elms_time, r_elms_time))
-        for elm_no in range(len(elms[:-1])):
+        for elm_no, _ in enumerate(elms[:-1]):
             if elms[elm_no + 1][0] - elms[elm_no][1] <= self.min_elm_window:  # default min_elm_window = 50
                 continue
 
@@ -319,7 +334,8 @@ class DataPrep:
 
             for ielm_time in self.arr[0][start_ielm:stop_ielm]:
                 ielm_index = np.argwhere(self.arr[0] == ielm_time)[0][0]
-                elm_cycles[(elm_no, ielm_index, ielm_time, self.arr[0][stop_ielm] - ielm_time)] = self.arr[1].T[ielm_index]
+                elm_cycles[(elm_no, ielm_index, ielm_time, self.arr[0][stop_ielm] - ielm_time)] = self.arr[1].T[
+                    ielm_index]
                 # elm_cycles[(elm_no, ielm_index, ielm_time, (ielm_time - self.arr[0][start_ielm]) /
                 #             (self.arr[0][stop_ielm] - self.arr[0][start_ielm]))] = self.arr[1].T[ielm_index]
         index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', 'T - ELM (ms)'])
@@ -328,35 +344,37 @@ class DataPrep:
 
         return self.elmdf
 
-    def split_from_raw(self):
+    # def split_from_raw(self):
+    #
+    #     if hasattr(self, 'elmdf'):
+    #         return self.elmdf
+    #
+    #     self.elms = self.elm_loc()
+    #     elm_cycles = {}
+    #     for elm_no, elm_time in enumerate(self.elms[:-1]):
+    #
+    #         if self.elms[elm_no + 1] - self.elms[elm_no] <= self.min_elm_window:  # default min_elm_window = 50
+    #             continue
+    #
+    #         start_ielm = index_match(self.arr[0], elm_time)
+    #         stop_ielm = index_match(self.arr[0], self.elms[elm_no + 1])
+    #
+    #         for ielm_time in self.arr[0][start_ielm:stop_ielm]:
+    #             '''MAX: Uncomment the lines below to get % of ELM'''
+    #             ielm_index = np.argwhere(self.arr[0] == ielm_time)[0][0]
+    #             # elm_cycles[(elm_no, ielm_index, ielm_time, self.arr[0][stop_ielm] - ielm_time)] = self.arr[1].T[ielm_index]
+    #             elm_cycles[(elm_no, ielm_index, ielm_time, (ielm_time - self.arr[0][start_ielm]) / (
+    #                     self.arr[0][stop_ielm] - self.arr[0][start_ielm]))] = self.arr[1].T[ielm_index]
+    #     # index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', 'T - ELM (ms)'])
+    #     index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', '% ELM'])
+    #     self.elmdf = pd.DataFrame(elm_cycles.values(), index=index)
+    #
+    #     return self.elmdf
 
-        if hasattr(self, 'elmdf'):
-            return self.elmdf
+    def peak_properties(self, blur=None, plot=False):
 
-        self.elms = self.elm_loc()
-        elm_cycles = {}
-        for elm_no, elm_time in enumerate(self.elms[:-1]):
-
-            if self.elms[elm_no + 1] - self.elms[elm_no] <= self.min_elm_window:  # default min_elm_window = 50
-                continue
-
-            start_ielm = index_match(self.arr[0], elm_time)
-            stop_ielm = index_match(self.arr[0], self.elms[elm_no + 1])
-
-            for ielm_time in self.arr[0][start_ielm:stop_ielm]:
-                '''MAX: Uncomment the lines below to get % of ELM'''
-                ielm_index = np.argwhere(self.arr[0] == ielm_time)[0][0]
-                # elm_cycles[(elm_no, ielm_index, ielm_time, self.arr[0][stop_ielm] - ielm_time)] = self.arr[1].T[ielm_index]
-                elm_cycles[(elm_no, ielm_index, ielm_time, (ielm_time - self.arr[0][start_ielm]) / (
-                        self.arr[0][stop_ielm] - self.arr[0][start_ielm]))] = self.arr[1].T[ielm_index]
-        # index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', 'T - ELM (ms)'])
-        index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', '% ELM'])
-        self.elmdf = pd.DataFrame(elm_cycles.values(), index=index)
-
-        return self.elmdf
-
-    def peak_properties(self, blur, plot=False):
-
+        if hasattr(self, 'props'):
+            return self.props
         if not hasattr(self, 'elmdf'):
             self.split()
         if not hasattr(self, 'mask'):
@@ -364,8 +382,10 @@ class DataPrep:
                 mask_bin = self.make_mask()
             else:
                 self.set_mask_binary = True
-                self.peak_properties(blur=blur)
-                return
+                if blur is not None:
+                    self.blur = blur
+                self.peak_properties(blur=self.blur)
+                return self.props
 
         mask = mask_bin[self.elmdf.index.get_level_values(level='Index').to_numpy()]
         mask_blur = gaussian_filter(mask, blur)
@@ -380,18 +400,22 @@ class DataPrep:
             plt.show()
 
         maskdf = pd.DataFrame(data=mask_blur, index=self.elmdf.index)
-        props = maskdf.apply(
+        self.props = maskdf.apply(
             lambda x: pd.Series(self.peakomatic(x), index=['Peak', 'Peak Amplitude', 'Left/Right', 'Width Height']),
             axis=1)
 
-        return props
+        return self.props
 
 
 if __name__ == '__main__':
-    sh = DataPrep(174828)
-    exit()
+
+    dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'
+    sh = DataPrep(174830, dir)
     sh.set_mask_binary = True
-    window_spec = sh.split().xs(5, level=0)
+    window_spec = sh.split().xs(7, level=0)
+    window = sh.peak_properties(blur=3)
+    # print(window_spec.iloc[0:10])
+    # exit()
     plt.imshow(window_spec.T,
                extent=[window_spec.index.get_level_values(level='Time (ms)')[0],
                        window_spec.index.get_level_values(level='Time (ms)')[-1],
@@ -402,20 +426,14 @@ if __name__ == '__main__':
                origin='lower',
                interpolation='none',
                aspect='auto')
-    window = sh.peak_properties(blur=3)
-    for time in window.xs(5, level=0).iterrows():
+
+    for time in window.xs(7, level=0).iterrows():
         widths = np.array(time[1][2]).T
         widths[0] = np.subtract(time[1][0], widths[0])
         widths[1] = np.subtract(widths[1], time[1][0])
-        print(widths)
         plt.errorbar(np.full_like(time[1][0], time[0][1]), time[1][0], yerr=widths,
                      color='blue', fmt='o',
                      solid_capstyle='projecting', capsize=5)
     plt.ylim((0, 1500))
     plt.show()
     exit()
-    window = sh.peak_properties().xs(2, level=0)
-    percentage = window.index.get_level_values(level=2).to_numpy()
-    window['Widths'] = window['Left/Right'].apply(lambda x: [*map(lambda y: y[1] - y[0], x)])
-
-    print(window)
