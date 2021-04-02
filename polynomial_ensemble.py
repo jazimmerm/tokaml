@@ -7,14 +7,19 @@ from sklearn import datasets, linear_model
 from sklearn.metrics import mean_squared_error, r2_score
 
 ### set hyperparameters ###
-epochs = 10 # how many times through the data
-poly_degree = 4 # max degree of polynomial features to create during
-                # data augmentation
+epochs = 10             # how many times through the data
+poly_degree = 4         # max degree of polynomial features to create during
+                        # data augmentation
+test_fraction = 0.33    # fraction of data to split off for testing
 
 ### get data ###
 data = None # Jeff plz insert DataFrame of tuples. one row = one sample
 # going to assume the fields are amp, freq, width, and t_elm
-X = data[['amp', 'freq', 'width', 'elm']]
+
+# combine together multiple data files
+
+# define features
+X = data[['amp', 'freq', 'width', 't_since_elm']]
 Y = data['t_elm']
 
 # split the data
@@ -23,7 +28,7 @@ X_train, X_test, y_train, y_test = \
                         data,
                         X,
                         y,
-                        test_size=0.33,
+                        test_size=test_fraction,
                         random_state=42
                     )
 
@@ -43,3 +48,7 @@ lin_model.fit(X_train_aug, y_train)
 X_test_aug = poly_transformer.fit_transform(X_test)
 y_pred = lin_model.predict(X_test_aug)
 print(y_pred)
+
+### train second layer model ###
+
+### test second layer model ###
