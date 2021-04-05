@@ -19,11 +19,11 @@ def get_data():
     props.reset_index(inplace=True)
     props['width'] = props['Left/Right'].apply(lambda x: [*map(lambda y: y[1] - y[0], x)])
 
-    for shot in shots:
-        sh = DataPrep(shot, pq_dir)
-        props_new = sh.peak_properties().reset_index(inplace=False)
-        props_new['width'] = props_new['Left/Right'].apply(lambda x: [*map(lambda y: y[1] - y[0], x)])
-        props = pd.concat((props, props_new), ignore_index=True)
+    # for shot in shots:
+    #     sh = DataPrep(shot, pq_dir)
+    #     props_new = sh.peak_properties().reset_index(inplace=False)
+    #     props_new['width'] = props_new['Left/Right'].apply(lambda x: [*map(lambda y: y[1] - y[0], x)])
+    #     props = pd.concat((props, props_new), ignore_index=True)
 
     return props
 

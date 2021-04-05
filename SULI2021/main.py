@@ -1,5 +1,6 @@
 # from random_tools.DataAnalysis import *
 from random_tools.DataPrep import *
+from models.ensemble import *
 from random_tools.tools import *
 
 if __name__ == '__main__':
@@ -13,6 +14,8 @@ if __name__ == '__main__':
          [174860.]
          [174870.]
     '''
+    to_parquet()
+    exit()
     dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'
 
     sh = DataPrep(174830, dir)

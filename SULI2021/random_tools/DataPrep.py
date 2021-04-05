@@ -401,7 +401,7 @@ class DataPrep:
 
         maskdf = pd.DataFrame(data=mask_blur, index=self.elmdf.index)
         self.props = maskdf.apply(
-            lambda x: pd.Series(self.peakomatic(x), index=['freq', 'amp', 'Left/Right', 'Width Height']),
+            lambda x: pd.Series(self.peakomatic(x), index=['Peak_Freq', 'Peak_Amp', 'Left/Right', 'Width Height']),
             axis=1)
 
         return self.props
