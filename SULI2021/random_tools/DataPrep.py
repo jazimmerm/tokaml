@@ -334,11 +334,11 @@ class DataPrep:
 
             for ielm_time in self.arr[0][start_ielm:stop_ielm]:
                 ielm_index = np.argwhere(self.arr[0] == ielm_time)[0][0]
-                elm_cycles[(elm_no, ielm_index, ielm_time, self.arr[0][stop_ielm] - ielm_time)] = self.arr[1].T[
+                elm_cycles[(elm_no, ielm_index, ielm_time - self.arr[0][start_ielm], self.arr[0][stop_ielm] - ielm_time)] = self.arr[1].T[
                     ielm_index]
                 # elm_cycles[(elm_no, ielm_index, ielm_time, (ielm_time - self.arr[0][start_ielm]) /
                 #             (self.arr[0][stop_ielm] - self.arr[0][start_ielm]))] = self.arr[1].T[ielm_index]
-        index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', 'T - ELM (ms)'])
+        index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 't_since_elm', 't_elm'])
         # index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', '% ELM'])
         self.elmdf = pd.DataFrame(elm_cycles.values(), index=index)
 
@@ -401,7 +401,7 @@ class DataPrep:
 
         maskdf = pd.DataFrame(data=mask_blur, index=self.elmdf.index)
         self.props = maskdf.apply(
-            lambda x: pd.Series(self.peakomatic(x), index=['Peak', 'Peak Amplitude', 'Left/Right', 'Width Height']),
+            lambda x: pd.Series(self.peakomatic(x), index=['freq', 'amp', 'Left/Right', 'Width Height']),
             axis=1)
 
         return self.props
