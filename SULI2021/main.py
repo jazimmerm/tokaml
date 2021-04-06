@@ -14,19 +14,15 @@ if __name__ == '__main__':
          [174860.]
          [174870.]
     '''
-    to_parquet()
-    exit()
+
     dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'
 
     sh = DataPrep(174830, dir)
-    elmdf = sh.peak_properties()
-    keys = elmdf.index.unique(level=0)
-    sh.id_band(keys[3])
+    plot_split(sh)
     exit()
-    elmdf = sh.split()
 
-    greater_than = elmdf.loc[elmdf.index.get_level_values(level='T - ELM (ms)') >= 10]
-    less_than = elmdf.loc[elmdf.index.get_level_values(level='T - ELM (ms)') <= 10]
+    greater_than = elmdf.loc[elmdf.index.get_level_values(level='t_to_elm') >= 10]
+    less_than = elmdf.loc[elmdf.index.get_level_values(level='t_to_elm') <= 10]
     for elm_no, newdf in greater_than.groupby(level=0):
         print(len(newdf.index))
     for elm_no, newdf in less_than.groupby(level=0):

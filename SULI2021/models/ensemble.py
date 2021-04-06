@@ -31,29 +31,30 @@ def to_parquet():
 
     all_dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/'
     all_df = get_data()
+    all_df.drop(columns=['Left/Right'])
     all_df.to_parquet(f'{all_dir}all.pq', engine='pyarrow')
 
 
 
 if __name__ == '__main__':
 
-    ### set hyperparameters ###
-    epochs = 10 # how many times through the data
-    poly_degree = 4 # max degree of polynomial features to create during
-                    # data augmentation
+    # set hyperparameters #
+    epochs = 10  # how many times through the data
+    poly_degree = 4  # max degree of polynomial features to create during data augmentation
 
-    ### get data ###
+    # get data #
     data = get_data() # Jeff plz insert DataFrame of tuples. one row = one sample
     # going to assume the fields are amp, freq, width, and t_elm
 
-    X = data[['amp', 'freq', 'width', 't_since_elm']]
-    Y = data['t_elm']
+    X = data[['Peak_Amp', 'Peak_Freq', 'width', 't_since_elm']]
+    Y = data['t_to_elm']
 
     # split the data
     X_train, X_test, y_train, y_test = train_test_split(X, Y,
                                                         test_size=0.33,
                                                         random_state=42)
 
+    print(X_train)
     ### train the first layer model ###
     # this model learns the best polynomial to predict t_elm from
     # the other data fields
