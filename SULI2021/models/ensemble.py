@@ -1,49 +1,49 @@
+from typing import List
+
 import numpy as np
+import matplotlib.pyplot as plt
 import pandas as pd
 import sklearn
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn import datasets, linear_model
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, explained_variance_score
 from SULI2021.random_tools.DataPrep import DataPrep
 import os
 
-def get_data():
 
+def get_data():
     pq_dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'
     shots = sorted(os.listdir(pq_dir))
     shots = [i.split('.')[0] for i in shots if '153' not in i]
-
+    print(shots[0])
     sh = DataPrep(shots[0], pq_dir)
     props = sh.peak_properties()
-    props.reset_index(inplace=True)
-    props['width'] = props['Left/Right'].apply(lambda x: [*map(lambda y: y[1] - y[0], x)])
 
     # for shot in shots:
+    #     print(shot)
     #     sh = DataPrep(shot, pq_dir)
-    #     props_new = sh.peak_properties().reset_index(inplace=False)
-    #     props_new['width'] = props_new['Left/Right'].apply(lambda x: [*map(lambda y: y[1] - y[0], x)])
+    #     props_new = sh.peak_properties()
     #     props = pd.concat((props, props_new), ignore_index=True)
 
     return props
 
-def to_parquet():
 
+def to_parquet():
     all_dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/'
     all_df = get_data()
-    all_df.drop(columns=['Left/Right'])
+    all_df.drop(columns=['Left/Right'], inplace=True)
     all_df.to_parquet(f'{all_dir}all.pq', engine='pyarrow')
 
-
-
-if __name__ == '__main__':
-
+def lin_model(shot):
     # set hyperparameters #
     epochs = 10  # how many times through the data
     poly_degree = 4  # max degree of polynomial features to create during data augmentation
 
     # get data #
-    data = get_data() # Jeff plz insert DataFrame of tuples. one row = one sample
+    pq_dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'
+    data = DataPrep(shot, pq_dir).peak_properties()
+    data = pd.read_parquet('/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/all.pq', engine='pyarrow')
     # going to assume the fields are amp, freq, width, and t_elm
 
     X = data[['Peak_Amp', 'Peak_Freq', 'width', 't_since_elm']]
@@ -54,7 +54,6 @@ if __name__ == '__main__':
                                                         test_size=0.33,
                                                         random_state=42)
 
-    print(X_train)
     ### train the first layer model ###
     # this model learns the best polynomial to predict t_elm from
     # the other data fields
@@ -70,4 +69,65 @@ if __name__ == '__main__':
     ### test the first layer model ###
     X_test_aug = poly_transformer.fit_transform(X_test)
     y_pred = lin_model.predict(X_test_aug)
-    print(y_pred)
+
+    MSE = mean_squared_error(y_test, y_pred)
+    MAE = mean_absolute_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+    EXP = explained_variance_score(y_test, y_pred)
+
+    print(f'Shot {shot}')
+    print(f'\tMean Squared Error: {MSE}')
+    print(f'\tMean Absolute Error: {MAE}')
+    print(f'\tExplained Variance: {EXP}')
+    print(f'\tCoefficient of Determination (R2): {r2}')
+
+    fig, axs = plt.subplots(2, 2)
+    axs[0, 0].set_title('Amplitude')
+    axs[0, 0].scatter(X_test['Peak_Amp'].tolist(), y_test, c='black')
+    axs[0, 0].plot(X_test['Peak_Amp'].tolist(), y_pred, c='blue')
+    axs[0, 0].set_xlabel('Amplitude')
+    axs[0, 0].set_ylabel('Time to ELM')
+
+    axs[0, 1].set_title('Frequency')
+    axs[0, 1].scatter(X['Peak_Freq'].tolist(), Y, c='black')
+    axs[0, 1].plot(X_test['Peak_Freq'].tolist(), y_pred, c='blue')
+    axs[0, 1].set_xlabel('Frequency')
+    axs[0, 1].set_ylabel('Time to ELM')
+
+    axs[1, 1].set_title('Width')
+    axs[1, 1].scatter(X['width'].tolist(), Y, c='black')
+    axs[1, 1].plot(X_test['width'].tolist(), y_pred, c='blue')
+    axs[1, 1].set_xlabel('width')
+    axs[1, 1].set_ylabel('Time to ELM')
+
+    axs[1, 0].set_title('Time since Last ELM')
+    axs[1, 0].scatter(X['t_since_elm'].tolist(), Y, c='black')
+    axs[1, 0].plot(X_test['t_since_elm'].tolist(), y_pred, c='blue')
+    axs[1, 0].set_xlabel('t_since_elm')
+    axs[1, 0].set_ylabel('Time to ELM')
+
+
+    plt.show()
+
+    return MSE, MAE, r2
+
+
+
+
+if __name__ == '__main__':
+
+    shots = sorted(os.listdir('/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet'))
+    shots = [i.split('.')[0] for i in shots if '153' not in i]
+
+    MSE_list, MAE_list, r2_list = [], [], []
+
+    MSE, MAE, r2 = lin_model(170891)
+    MSE_list.append(MSE)
+    MAE_list.append(MAE)
+    r2_list.append(r2)
+
+    print(f'Average mean squared error: {np.mean(MSE_list)}')
+    print(f'Average mean absolute error: {np.mean(MAE_list)}')
+    print(f'Average coefficient of determination (R2): {np.mean(r2_list)}')
+
+    print(f'Highest/lowest coefficient of determination (R2): {np.max(r2_list)}/{np.min(r2_list)}')

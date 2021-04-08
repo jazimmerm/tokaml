@@ -64,15 +64,16 @@ class DataPrep:
 
     # extract values for specific shot from above list of shots
     # this is for the HDF5 files my mentor gave me, I'll switch it up for the parquet files
-    def get_shot_from_mat(self):
-        cwd = os.getcwd()
-        file = cwd + '/data/RESULTS_ECH_EFFECTS_SPECTRA_B3.mat'
+    @staticmethod
+    def get_shot_from_mat(shot_no):
+
+        file = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/RESULTS_ECH_EFFECTS_SPECTRA_B3.mat'
         # import data from .mat file into python numpy arrays
         mat = h5py.File(file, 'r')
         dat_ech = mat['DAT_ECH']
         shlst = mat['shn'][:]
 
-        shindex = [np.where(shlst == s) for s in shlst if self.shot_no in s][0][0][0]
+        shindex = [np.where(shlst == s) for s in shlst if shot_no in s][0][0][0]
 
         tds = dat_ech.get('TIME')[shindex][0]
         sds = dat_ech.get('SPECTRUM')[shindex][0]
@@ -224,6 +225,7 @@ class DataPrep:
         # smooth bool switches between gaussian filtered 1d slice or raw data.
         peaks = self.slice1d(tme, smooth=True, ax=ax2)
         ax1.plot(np.full_like(peaks, tme), self.arr[2][peaks], 'rx')
+        ax2.set_ylabel('Amplitude')
         plt.show()
 
     def make_mask(self, plot=False):
@@ -334,11 +336,13 @@ class DataPrep:
 
             for ielm_time in self.arr[0][start_ielm:stop_ielm]:
                 ielm_index = np.argwhere(self.arr[0] == ielm_time)[0][0]
-                elm_cycles[(elm_no, ielm_index, ielm_time, ielm_time - self.arr[0][start_ielm], self.arr[0][stop_ielm] - ielm_time)] = self.arr[1].T[
+                elm_cycles[(elm_no, ielm_index, ielm_time, ielm_time - self.arr[0][start_ielm],
+                            self.arr[0][stop_ielm] - ielm_time)] = self.arr[1].T[
                     ielm_index]
                 # elm_cycles[(elm_no, ielm_index, ielm_time, (ielm_time - self.arr[0][start_ielm]) /
                 #             (self.arr[0][stop_ielm] - self.arr[0][start_ielm]))] = self.arr[1].T[ielm_index]
-        index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', 't_since_elm', 't_to_elm'])
+        index = pd.MultiIndex.from_tuples(elm_cycles.keys(),
+                                          names=['ELM_No', 'Index', 'Time (ms)', 't_since_elm', 't_to_elm'])
         # index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', '% ELM'])
         self.elmdf = pd.DataFrame(elm_cycles.values(), index=index)
 
@@ -400,9 +404,27 @@ class DataPrep:
             plt.show()
 
         maskdf = pd.DataFrame(data=mask_blur, index=self.elmdf.index)
-        self.props = maskdf.apply(
-            lambda x: pd.Series(self.peakomatic(x), index=['Peak_Freq', 'Peak_Amp', 'Left/Right', 'Width Height']),
+        props = maskdf.apply(
+            lambda x: pd.Series(self.peakomatic(x),
+                                index=['Peak_Freq', 'Peak_Amp', 'Left/Right', 'Width Height']),
             axis=1)
+        # self.props.reset_index(inplace=True)
+        props['width'] = props['Left/Right'].apply(lambda x: [*map(lambda y: y[1] - y[0], x)])
+        props.reset_index(inplace=True)
+        rows = []
+        _ = props.apply(lambda row: [rows.append([row['ELM_No'],  # Index
+                                                  row['Index'],  # Index
+                                                  row['Time (ms)'],  # Index
+                                                  row['t_since_elm'],
+                                                  row['t_to_elm'],
+                                                  freq,
+                                                  row['Peak_Amp'][i],
+                                                  row['Left/Right'][i],
+                                                  row['Width Height'][i],
+                                                  row['width'][i]])
+                                     for i, freq in enumerate(row.Peak_Freq)], axis=1)
+
+        self.props = pd.DataFrame(rows, columns=props.columns).set_index(['ELM_No', 'Index', 'Time (ms)'])
 
         return self.props
 
@@ -412,7 +434,8 @@ if __name__ == '__main__':
     dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'
     sh = DataPrep(174830, dir)
     sh.set_mask_binary = True
-    print(sh.split())
+    print((sh.arr[0][-1]-sh.arr[0][0])/len(sh.arr[0]))
+    sh.plot_slice(2950)
     exit()
     window_spec = sh.split().xs(7, level=0)
     window = sh.peak_properties(blur=3)

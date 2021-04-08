@@ -17,8 +17,7 @@ if __name__ == '__main__':
 
     dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'
 
-    sh = DataPrep(174830, dir)
-    plot_split(sh)
+    to_parquet()
     exit()
 
     greater_than = elmdf.loc[elmdf.index.get_level_values(level='t_to_elm') >= 10]
