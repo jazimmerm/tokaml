@@ -36,7 +36,7 @@ def to_parquet():
 
 
 
-if __name__ == '__main__':
+def run_model():
 
     # set hyperparameters #
     epochs = 10  # how many times through the data
@@ -47,10 +47,10 @@ if __name__ == '__main__':
     # going to assume the fields are amp, freq, width, and t_elm
 
     X = data[['Peak_Amp', 'Peak_Freq', 'width', 't_since_elm']]
-    Y = data['t_to_elm']
+    y = data['t_to_elm']
 
     # split the data
-    X_train, X_test, y_train, y_test = train_test_split(X, Y,
+    X_train, X_test, y_train, y_test = train_test_split(X, y,
                                                         test_size=0.33,
                                                         random_state=42)
 
