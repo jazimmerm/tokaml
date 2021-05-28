@@ -37,6 +37,7 @@ class DataPrep:
 
     @staticmethod
     def peakomatic(slce):
+        '''Returns peak properties.'''
         # These properties can be tweaked to fine-tune the results.
         smooth_arr = gaussian_filter1d(slce, 10)
         peaks, properties = find_peaks(smooth_arr, prominence=(np.mean(abs(smooth_arr)), None), distance=100,
@@ -49,7 +50,7 @@ class DataPrep:
                properties['width_heights']
 
     def id_band(self, xsec):
-
+        '''Used in Max Curie's work. Unfinished here.'''
         ielm_df = self.peak_properties().xs(xsec, level=0)
         widths = ielm_df['Left/Right'].to_numpy()
         peaks = ielm_df['Peak'].to_numpy()
@@ -66,7 +67,7 @@ class DataPrep:
     # this is for the HDF5 files my mentor gave me, I'll switch it up for the parquet files
     @staticmethod
     def get_shot_from_mat(shot_no):
-
+        '''Retrieves shots from .mat files.'''
         file = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/RESULTS_ECH_EFFECTS_SPECTRA_B3.mat'
         # import data from .mat file into python numpy arrays
         mat = h5py.File(file, 'r')
@@ -87,6 +88,7 @@ class DataPrep:
 
     # This is the one we can use for the parquet files.
     def get_shot(self):
+        '''Retrieve shots from parquet files.'''
         # change this to where your parquet files are stored
         file = self.dir + str(self.shot_no) + '.pq'
 
@@ -109,6 +111,7 @@ class DataPrep:
         return np.array([time, spectrum, freq], dtype=object)
 
     def elm_loc(self, plot=False):
+        '''Locates ELMs from raw data'''
         pq_dir = '/home/jazimmerman/PycharmProjects/SULI2021/SULI2021/data/B3/parquet/'
         file = pq_dir + str(self.shot_no) + '.pq'
 
@@ -364,7 +367,7 @@ class DataPrep:
         return self.elmdf
 
     def split_from_raw(self):
-
+    '''This is used for testing purposes. self.split() is used in practice.'''
         if hasattr(self, 'elmdf'):
             return self.elmdf
 
