@@ -128,6 +128,8 @@ class DataPrep:
             ax2.plot(peaks_time, props['peak_heights'], 'ro')
             ax2.plot(1000 * raw_time, raw_values)
             ax1.set_title(None)
+            ax2.set_title(None)
+            ax2.set_xlabel(None)
             ax1.text(0.5, 0.9, 'Spectrogram',
                      horizontalalignment='center',
                      verticalalignment='top',
@@ -138,9 +140,9 @@ class DataPrep:
                      verticalalignment='top',
                      color='black', fontsize=16,
                      transform=ax2.transAxes)
-            ax2.set_xlabel('Time (ms)')
-            fig.suptitle(f'Locations of ELMs in shot {self.shot_no}', fontsize=20)
-
+            ax2.set_xlabel('Time (ms)', fontsize=14)
+            ax2.set_ylabel('Amplitude', fontsize=14)
+            fig.suptitle(f'Locations of ELMs in shot {self.shot_no}', y=0.93, fontsize=20)
             plt.show()
 
         return peaks_time
@@ -154,15 +156,16 @@ class DataPrep:
             ax = plt.gca()
 
         heatmap = ax.imshow(self.arr[1],
-                            norm=LogNorm(),
+                            norm=LogNorm(vmin=np.min(self.arr[1])*3*10e7, vmax=np.max(self.arr[1])/500),
                             origin='lower',
                             extent=[self.arr[0][0], self.arr[0][-1], self.arr[2][0], self.arr[2][-1]],
                             interpolation='none',
+                            cmap='viridis',
                             aspect='auto'
                             )
-        ax.set_title('Spectrogram')
-        ax.set_xlabel('Time (ms)')
-        ax.set_ylabel('Frequency (Hz)')
+        ax.set_title(f'Spectrogram For Shot {self.shot_no}')
+        ax.set_xlabel('Time (ms)', fontsize=14)
+        ax.set_ylabel('Frequency (Hz)', fontsize=14)
         return heatmap
 
     # make the plot of the spectral data for given time
@@ -224,8 +227,15 @@ class DataPrep:
         ax1.axvline(tme, c='r')
         # smooth bool switches between gaussian filtered 1d slice or raw data.
         peaks = self.slice1d(tme, smooth=True, ax=ax2)
-        ax1.plot(np.full_like(peaks, tme), self.arr[2][peaks], 'rx')
-        ax2.set_ylabel('Amplitude')
+        ax1.plot(np.full_like(peaks, tme), self.arr[2][peaks], 'rx', markersize=15, mew=5)
+        ax2.text(0.5, 0.9, f'Cross Section at Time t={tme}ms',
+                 horizontalalignment='center',
+                 verticalalignment='top',
+                 color='black', fontsize=16,
+                 transform=ax2.transAxes)
+        ax2.set_ylabel('Amplitude', fontsize=14)
+        ax2.set_xlabel('Frequency (Hz)', fontsize=14)
+        plt.tight_layout()
         plt.show()
 
     def make_mask(self, plot=False):
@@ -239,12 +249,13 @@ class DataPrep:
 
             fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, sharey=True)
             fig.subplots_adjust(hspace=0)
+
             self.heatmap2d(ax=ax1)
             ax1.imshow(self.mask.T,
                        extent=[self.arr[0][0], self.arr[0][-1], self.arr[2][0], self.arr[2][-1]],
                        norm=LogNorm(),
                        origin='lower',
-                       cmap='Reds',
+                       cmap='Set1',
                        interpolation='none',
                        aspect='auto')
             # )
@@ -253,18 +264,18 @@ class DataPrep:
                        extent=[self.arr[0][0], self.arr[0][-1], self.arr[2][0], self.arr[2][-1]],
                        norm=LogNorm(),
                        origin='lower',
-                       cmap='Reds',
+                       cmap='Set1',
                        interpolation='none',
                        aspect='auto')
             # )
 
-            ax2.set_xlabel('Time (ms)')
-            ax2.set_ylabel('Frequency (Hz)')
+            ax2.set_xlabel('Time (ms)', fontsize=14)
+            ax2.set_ylabel('Frequency (Hz)', fontsize=14)
 
             ax1.text(0.5, 0.9, 'Spectrogram with Mask Overlaid',
                      horizontalalignment='center',
                      verticalalignment='top',
-                     color='black', fontsize=16,
+                     color='white', fontsize=16,
                      transform=ax1.transAxes)
             ax2.text(0.5, 0.9, 'Masked Array with Modes Only',
                      horizontalalignment='center',
@@ -292,7 +303,7 @@ class DataPrep:
         self.mask = mask.T
         return self.make_mask(plot=plot)
 
-    def split(self, plot=False):
+    def split(self, plot=False, ax=None):
         '''
         split returns a dataframe of the original array which excludes all arrays belonging to ELM's.
         It also returns a hot array with 0 for all intra-elm indices and 1 for all elm indices (the ones that were excluded
@@ -315,14 +326,6 @@ class DataPrep:
         l_elms_time = self.arr[0][l_elms]
         r_elms_time = self.arr[0][r_elms]
 
-        if plot:
-            fig, ax = plt.subplots(1, 1)
-            self.heatmap2d(ax=ax)
-            for t in l_elms_time:
-                ax.axvline(t, ymin=stop / self.arr[1].shape[0], c='red')
-            for t in r_elms_time:
-                ax.axvline(t, ymin=stop / self.arr[1].shape[0], c='green')
-            plt.show()
 
         # make dict with keys, values, times
         elm_cycles = {}
@@ -346,36 +349,48 @@ class DataPrep:
         # index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', '% ELM'])
         self.elmdf = pd.DataFrame(elm_cycles.values(), index=index)
 
+        if plot:
+            if ax == None:
+                ax = plt.gca()
+            # fig, ax = plt.subplots(1, 1)
+            self.heatmap2d(ax=ax)
+            for t in l_elms_time:
+                ax.axvline(t, ymin=stop / self.arr[1].shape[0], c='red', linewidth=1.)
+            for t in r_elms_time:
+                ax.axvline(t, ymin=stop / self.arr[1].shape[0], c='green', linewidth=1.)
+
+            return ax, self.elmdf
+
         return self.elmdf
 
-    # def split_from_raw(self):
-    #
-    #     if hasattr(self, 'elmdf'):
-    #         return self.elmdf
-    #
-    #     self.elms = self.elm_loc()
-    #     elm_cycles = {}
-    #     for elm_no, elm_time in enumerate(self.elms[:-1]):
-    #
-    #         if self.elms[elm_no + 1] - self.elms[elm_no] <= self.min_elm_window:  # default min_elm_window = 50
-    #             continue
-    #
-    #         start_ielm = index_match(self.arr[0], elm_time)
-    #         stop_ielm = index_match(self.arr[0], self.elms[elm_no + 1])
-    #
-    #         for ielm_time in self.arr[0][start_ielm:stop_ielm]:
-    #             '''MAX: Uncomment the lines below to get % of ELM'''
-    #             ielm_index = np.argwhere(self.arr[0] == ielm_time)[0][0]
-    #             # elm_cycles[(elm_no, ielm_index, ielm_time, self.arr[0][stop_ielm] - ielm_time)] = self.arr[1].T[ielm_index]
-    #             elm_cycles[(elm_no, ielm_index, ielm_time, (ielm_time - self.arr[0][start_ielm]) / (
-    #                     self.arr[0][stop_ielm] - self.arr[0][start_ielm]))] = self.arr[1].T[ielm_index]
-    #     # index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', 't_to_elm'])
-    #     index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', '% ELM'])
-    #     self.elmdf = pd.DataFrame(elm_cycles.values(), index=index)
-    #
-    #     return self.elmdf
+    def split_from_raw(self):
 
-    def peak_properties(self, blur=None, plot=False):
+        if hasattr(self, 'elmdf'):
+            return self.elmdf
+
+        self.elms = self.elm_loc()
+        elm_cycles = {}
+        for elm_no, elm_time in enumerate(self.elms[:-1]):
+
+            if self.elms[elm_no + 1] - self.elms[elm_no] <= self.min_elm_window:  # default min_elm_window = 50
+                continue
+
+            start_ielm = index_match(self.arr[0], elm_time)
+            stop_ielm = index_match(self.arr[0], self.elms[elm_no + 1])
+
+            for ielm_time in self.arr[0][start_ielm:stop_ielm]:
+                '''MAX: Uncomment the lines below to get % of ELM'''
+                ielm_index = np.argwhere(self.arr[0] == ielm_time)[0][0]
+                # elm_cycles[(elm_no, ielm_index, ielm_time, self.arr[0][stop_ielm] - ielm_time)] = self.arr[1].T[ielm_index]
+                elm_cycles[(elm_no, ielm_index, ielm_time, (ielm_time - self.arr[0][start_ielm]) / (
+                        self.arr[0][stop_ielm] - self.arr[0][start_ielm]))] = self.arr[1].T[ielm_index]
+        # index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', 't_to_elm'])
+        index = pd.MultiIndex.from_tuples(elm_cycles.keys(), names=['ELM_No', 'Index', 'Time (ms)', '% ELM'])
+        elmdf = pd.DataFrame(elm_cycles.values(), index=index)
+
+        return elmdf
+
+    def peak_properties(self, blur=None, original=False, plot=False):
 
         if hasattr(self, 'props'):
             return self.props
@@ -388,12 +403,13 @@ class DataPrep:
                 self.set_mask_binary = True
                 if blur is not None:
                     self.blur = blur
-                self.peak_properties(blur=self.blur)
+                self.peak_properties(blur=self.blur, original=original, plot=plot)
                 return self.props
 
         mask = mask_bin[self.elmdf.index.get_level_values(level='Index').to_numpy()]
         mask_blur = gaussian_filter(mask, blur)
         if plot:
+            plt.rc('font', size=15)
             plt.imshow(mask_blur.T,
                        extent=[self.arr[0][0], self.arr[0][-1], self.arr[2][0], self.arr[2][-1]],
                        norm=LogNorm(),
@@ -401,6 +417,7 @@ class DataPrep:
                        cmap='Reds',
                        interpolation='none',
                        aspect='auto')
+
             plt.show()
 
         maskdf = pd.DataFrame(data=mask_blur, index=self.elmdf.index)
@@ -408,10 +425,16 @@ class DataPrep:
             lambda x: pd.Series(self.peakomatic(x),
                                 index=['Peak_Freq', 'Peak_Amp', 'Left/Right', 'Width Height']),
             axis=1)
-        # self.props.reset_index(inplace=True)
+
         props['width'] = props['Left/Right'].apply(lambda x: [*map(lambda y: y[1] - y[0], x)])
+
+        if original:
+            self.props = props
+            return self.props
+
         props.reset_index(inplace=True)
         rows = []
+        np.seterr(divide='ignore')
         _ = props.apply(lambda row: [rows.append([row['ELM_No'],  # Index
                                                   row['Index'],  # Index
                                                   row['Time (ms)'],  # Index
@@ -423,9 +446,7 @@ class DataPrep:
                                                   row['Width Height'][i],
                                                   row['width'][i]])
                                      for i, freq in enumerate(row.Peak_Freq)], axis=1)
-
         self.props = pd.DataFrame(rows, columns=props.columns).set_index(['ELM_No', 'Index', 'Time (ms)'])
-
         return self.props
 
 
@@ -446,7 +467,7 @@ if __name__ == '__main__':
                        window_spec.index.get_level_values(level='Time (ms)')[-1],
                        0,
                        len(window_spec.values[0])],
-               norm=LogNorm(),
+               norm=LogNorm(vmin=np.min(self.arr[1])*3*10e8, vmax=np.max(self.arr[1])/500),
                cmap='Set1',
                origin='lower',
                interpolation='none',
