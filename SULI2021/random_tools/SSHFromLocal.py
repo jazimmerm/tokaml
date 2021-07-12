@@ -1,6 +1,6 @@
 import sys
 import os
-from import_mat import *
+from ..main import *
 
 def main():
 
@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
             sftp = ssh.open_sftp()
             sftp.put(__file__, '/tmp/script.py')
-            sftp.put(os.path.abspath('../import_mat.py'), '/tmp/import_mat.py')
+            sftp.put(os.path.abspath('../main.py'), '/tmp/import_mat.py')
             sftp.close()
 
             stdin, stdout, stderr = ssh.exec_command('cd /tmp;python /tmp/script.py')
